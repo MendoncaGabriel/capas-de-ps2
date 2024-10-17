@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Galeria de Imagens</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-900 text-gray-200 font-sans">
+    <header class="flex justify-between items-center p-4 bg-gray-800 rounded shadow-md">
+        <h1 class="text-2xl font-bold">Galeria de Imagens</h1>
+        <div class="relative w-1/3">
+            <input type="text" placeholder="Pesquisar..." id="inputPesquisa" class="w-full h-full px-4 py-2 rounded-full bg-gray-700 text-gray-300 focus:outline-none focus:ring focus:ring-blue-400 transition" />
+            <button id="clearButton" class="absolute right-0 h-full px-3 text-gray-400 hover:text-gray-200 focus:outline-none hidden">✖</button>
+        </div>
+    </header>
+
+    <section id="galeria" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 p-4"></section>
+
+    <div id="pagination" class="flex justify-center items-center mt-4"></div>
+
+    <div id="modal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75 hidden">
+        <div class="relative">
+            <img id="modalImage" class="max-w-full h-screen rounded-md shadow-lg" />
+            <button id="downloadButton" class="absolute top-2 -right-8 transform -translate-x-1/2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-500 transition">
+                Download
+            </button>
+            <button id="closeButton" class="absolute top-2 -right-16 text-white bg-red-500 rounded-full w-10 h-10 flex items-center justify-center text-xl" onclick="closeModal()">×</button>
+        </div>
+    </div>
+
+    <footer class="flex justify-center items-center mt-4 p-4">
+        <span class="text-sm">© 2024 Galeria de Imagens. Todos os direitos reservados.</span>
+    </footer>
+
+    <script>
+        const galeria = document.getElementById('galeria');
+        const inputPesquisa = document.getElementById('inputPesquisa');
+        const clearButton = document.getElementById('clearButton');
+        const pagination = document.getElementById('pagination');
+        const modal = document.getElementById('modal');
+        const modalImage = document.getElementById('modalImage');
+        const downloadButton = document.getElementById('downloadButton');
+
+        let currentPage = 1;
+        const itemsPerPage = 20;
+        let allImages = [];
+
+        async function loadImagens(imagens) {
+            galeria.innerHTML = ''; // Limpa a galeria antes de carregar novas imagens
+            imagens.forEach(imagem => {
+                const imgElement = document.createElement('img');
+                imgElement.src = `storage/images-compacted/${imagem}`;
+                imgElement.alt = imagem;
+                imgElement.className = 'h-[400px] w-[282px] object-cover object-right shadow-lg rounded-md cursor-pointer';
+                imgElement.addEventListener('click', () => openModal(imagem));
+                galeria.appendChild(imgElement);
+            });
+        }
+
+        function clearSearch() {
+            inputPesquisa.value = '';
+            currentPage = 1; // Reinicia a página para 1 na limpeza
+            renderPage();
+            clearButton.classList.add("hidden");
+        }
+
+        function openModal(imagem) {
+            modalImage.src = `storage/images-compacted/${imagem}`;
+            downloadButton.onclick = () => {
+                const link = document.createElement('a');
+                link.href = modalImage.src;
+                link.download = imagem;
+                link.click();
+            };
+            modal.classList.remove('hidden');
+        }
+
+        function closeModal() {
+            modal.classList.add('hidden');
+        }
+
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
+
+        function searchItems(array, searchTerm) {
+            const regex = new RegExp(searchTerm, 'i');
+            return array.filter(item => regex.test(item));
+        }
+
+        function paginate(array, page, itemsPerPage) {
+            const start = (page - 1) * itemsPerPage;
+            return array.slice(start, start + itemsPerPage);
+        }
+
+        function updatePagination(totalItems) {
+            pagination.innerHTML = '';
+            const totalPages = Math.ceil(totalItems / itemsPerPage);
+            const maxVisibleButtons = 5;
+            const halfVisible = Math.floor(maxVisibleButtons / 2);
+            let startPage = Math.max(1, currentPage - halfVisible);
+            let endPage = Math.min(totalPages, startPage + maxVisibleButtons - 1);
+
+            if (endPage - startPage < maxVisibleButtons - 1) {
+                startPage = Math.max(1, endPage - maxVisibleButtons + 1);
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
+                const pageButton = document.createElement('button');
+                pageButton.innerText = i;
+                pageButton.className = `mx-1 px-3 py-1 rounded hover:bg-gray-600 ${currentPage === i ? 'bg-blue-600 text-white' : 'bg-gray-500'}`;
+                pageButton.addEventListener('click', () => {
+                    currentPage = i;
+                    renderPage();
+                });
+                pagination.appendChild(pageButton);
+            }
+
+            // Indicar a página atual
+            const currentPageIndicator = document.createElement('span');
+            currentPageIndicator.innerText = `Página ${currentPage}`;
+            currentPageIndicator.className = 'ml-4 text-white';
+            pagination.appendChild(currentPageIndicator);
+        }
+
+        function renderPage() {
+            const results = searchItems(allImages, inputPesquisa.value);
+            const paginatedResults = paginate(results, currentPage, itemsPerPage);
+            loadImagens(paginatedResults);
+            updatePagination(results.length);
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const response = await fetch('/map_capas.json');
+            allImages = await response.json();
+            renderPage(); // Renderiza a página inicial
+        });
+
+        inputPesquisa.addEventListener("keydown", (event) => {
+            if (event.key === 'Enter') {
+                currentPage = 1; // Reinicia a página para 1 na nova pesquisa
+                renderPage();
+                let pesquisa = inputPesquisa.value;
+                inputPesquisa.value = "";
+                inputPesquisa.placeholder = "Pesquisado recentemente: " + pesquisa;
+            }
+            clearButton.classList.remove("hidden");
+        });
+
+        clearButton.addEventListener('click', clearSearch);
+    </script>
+</body>
+
+</html>
